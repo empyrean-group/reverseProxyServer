@@ -1,39 +1,34 @@
 const express = require('express');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 
-// Create an Express app
 const app = express();
+const PORT = 8000;
 
-// Define the proxy routes and targets
-const proxyRoutes = [
-  {
-    route: '/api',
-    target: 'http://google.com'
-  },
-  {
-    route: '/images',
-    target: 'http://images.example.com'
+// Sample hashmap of accepted web applications
+const acceptedWebApps = {
+  "google.com": "http://google.com",
+  "test.com": "http://test.com"
+};
+
+// Route to provide the list of accepted web applications
+app.get('/api/webapps', (req, res) => {
+  res.json(Object.keys(acceptedWebApps));
+});
+
+// Create reverse proxy middleware
+const proxyMiddleware = (req, res, next) => {
+  const target = acceptedWebApps[req.hostname];
+  if (target) {
+    return createProxyMiddleware({ target, changeOrigin: true })(req, res, next);
+  } else {
+    res.status(404).send('Not Found');
   }
-  // Add more routes and targets as needed
-];
+};
 
-// Create the proxy middleware for each route
-proxyRoutes.forEach(({ route, target }) => {
-  const options = {
-    target,
-    changeOrigin: true, // Required for host header and HTTPS support
-    logLevel: 'debug' // Set the log level to 'debug' for detailed logging
-  };
-  app.use(route, createProxyMiddleware(options));
-});
-
-// Handle all other routes with a 404 response
-app.use('*', (req, res) => {
-  res.status(404).send('404 - Not Found');
-});
+// Use the proxy middleware for all routes
+app.use(proxyMiddleware);
 
 // Start the server
-const PORT = 3000;
 app.listen(PORT, () => {
-  console.log(`Reverse proxy server listening on port ${PORT}`);
+  console.log(`Reverse proxy server is running on port ${PORT}`);
 });
