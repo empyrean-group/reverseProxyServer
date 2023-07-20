@@ -73,3 +73,45 @@
 ::1 - - [19/Jul/2023:11:17:22 +0000] "GET / HTTP/1.1" 500 - "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
 [2023-07-19T11:17:30.006Z] Proxying request for localhost to https://localhost:8000
 ::1 - - [19/Jul/2023:11:17:30 +0000] "GET / HTTP/1.1" 500 - "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+[2023-07-20T08:11:07.253Z] Proxying request for localhost to http://localhost:3000
+[2023-07-20T08:11:07.287Z] Proxy Error: connect ECONNREFUSED ::1:3000
+::1 - - [20/Jul/2023:08:11:07 +0000] "GET /favicon.ico HTTP/1.1" 500 11 "http://localhost:8000/api/webapps" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+[2023-07-20T08:11:34.734Z] Proxying request for localhost to http://localhost:3000
+[2023-07-20T08:11:34.738Z] Proxy Error: connect ECONNREFUSED ::1:3000
+::1 - - [20/Jul/2023:08:11:34 +0000] "GET /google.com HTTP/1.1" 500 11 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+[2023-07-20T08:11:35.066Z] Proxying request for localhost to http://localhost:3000
+[2023-07-20T08:11:35.069Z] Proxy Error: connect ECONNREFUSED ::1:3000
+::1 - - [20/Jul/2023:08:11:35 +0000] "GET /google.com HTTP/1.1" 500 11 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+[2023-07-20T08:11:35.171Z] Proxying request for localhost to http://localhost:3000
+[2023-07-20T08:11:35.180Z] Proxy Error: connect ECONNREFUSED ::1:3000
+::1 - - [20/Jul/2023:08:11:35 +0000] "GET /favicon.ico HTTP/1.1" 500 11 "http://localhost:8000/google.com" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+[2023-07-20T09:52:59.182Z] Proxying request for localhost to http://localhost:3000
+[2023-07-20T09:52:59.198Z] Proxy Error: connect ECONNREFUSED ::1:3000
+::1 - - [20/Jul/2023:09:52:59 +0000] "GET / HTTP/1.1" 500 11 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+[2023-07-20T09:52:59.335Z] Proxying request for localhost to http://localhost:3000
+[2023-07-20T09:52:59.340Z] Proxy Error: connect ECONNREFUSED ::1:3000
+::1 - - [20/Jul/2023:09:52:59 +0000] "GET /favicon.ico HTTP/1.1" 500 11 "http://localhost:8000/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+[2023-07-20T10:25:14.073Z] Proxying request for localhost to http://localhost:3000
+::1 - - [20/Jul/2023:10:25:14 +0000] "GET /google.com HTTP/1.1" 404 149 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+[2023-07-20T10:25:14.269Z] Proxying request for localhost to http://localhost:3000
+::1 - - [20/Jul/2023:10:25:14 +0000] "GET /google.com HTTP/1.1" 404 149 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+[2023-07-20T10:25:37.258Z] Proxying request for localhost to http://localhost:3000
+::1 - - [20/Jul/2023:10:25:37 +0000] "GET /test.com HTTP/1.1" 404 147 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+[2023-07-20T10:25:41.723Z] Proxying request for localhost to http://localhost:3000
+::1 - - [20/Jul/2023:10:25:41 +0000] "GET /localhost HTTP/1.1" 404 148 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+[2023-07-20T10:26:13.417Z] Proxying request for localhost to http://localhost:3000
+::1 - - [20/Jul/2023:10:26:13 +0000] "GET / HTTP/1.1" 200 35 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+[2023-07-20T10:26:13.565Z] Proxying request for localhost to http://localhost:3000
+::1 - - [20/Jul/2023:10:26:13 +0000] "GET /favicon.ico HTTP/1.1" 404 150 "http://localhost:8000/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+[2023-07-20T10:26:54.994Z] Proxying request for localhost to http://localhost:3000
+::1 - - [20/Jul/2023:10:26:55 +0000] "GET /google.com HTTP/1.1" 404 149 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+[2023-07-20T10:26:55.211Z] Proxying request for localhost to http://localhost:3000
+::1 - - [20/Jul/2023:10:26:55 +0000] "GET /google.com HTTP/1.1" 404 149 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+[2023-07-20T10:28:49.994Z] Proxying request for localhost to http://localhost:3000
+::1 - - [20/Jul/2023:10:28:50 +0000] "GET / HTTP/1.1" 304 - "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+[2023-07-20T10:29:14.368Z] Proxying request for localhost to http://localhost:3000
+::1 - - [20/Jul/2023:10:29:14 +0000] "GET / HTTP/1.1" 304 - "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+::1 - - [20/Jul/2023:11:12:37 +0000] "GET /path/to/resource HTTP/1.1" 404 9 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+::1 - - [20/Jul/2023:11:12:38 +0000] "GET /favicon.ico HTTP/1.1" 404 9 "http://localhost:8000/path/to/resource" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+::1 - - [20/Jul/2023:11:51:34 +0000] "GET /google.com HTTP/1.1" 404 9 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+::1 - - [20/Jul/2023:11:51:35 +0000] "GET /google.com HTTP/1.1" 404 9 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
