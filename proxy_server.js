@@ -3,10 +3,10 @@ const morgan = require('morgan');
 const fs = require('fs');
 const path = require('path');
 const net = require('net');
-const createProxy = require('./fast-proxy-lite');
+const httpProxy = require('http-proxy');
 
 const app = express();
-const PORT = 8000;
+const PORT = 8080;
 
 // Sample hashmap of accepted web applications with backend server information
 const acceptedWebApps = {
@@ -46,13 +46,18 @@ const checkAcceptedHostname = (req, res, next) => {
 app.use(checkAcceptedHostname);
 
 // Create the custom proxy
-const proxy = createProxy({ base: 'http://localhost' }); // Set the default backend server URL here
+const proxy = httpProxy.createProxyServer({});
 
 // Gateway route for all requests
 app.all('/*', async (req, res) => {
   const webapp = acceptedWebApps[req.headers.host];
   if (!webapp) return res.status(404).send('Not Found');
-  proxy(req, res, req.url, { base: webapp.backend });
+  
+  // Proxy the request to the backend server
+  proxy.web(req, res, {
+    target: webapp.backend,
+    changeOrigin: true,
+  });
 });
 
 // Error handling middleware for other unhandled errors
