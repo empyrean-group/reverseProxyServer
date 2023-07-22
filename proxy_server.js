@@ -2,8 +2,8 @@ const express = require('express');
 const morgan = require('morgan');
 const fs = require('fs');
 const path = require('path');
-const net = require('net');
 const httpProxy = require('http-proxy');
+const socketIOClient = require('socket.io-client'); // Use the correct module
 
 const app = express();
 const PORT = 8080;
@@ -18,32 +18,7 @@ const acceptedWebApps = {
   },
 };
 
-// Accepted hostnames (including "localhost")
-const acceptedHostnames = ["google.com", "test.com", "localhost"];
-
-// Route to provide the list of accepted web applications
-app.get('/api/webapps', (req, res) => {
-  res.json(Object.keys(acceptedWebApps));
-});
-
-// Logging Middleware to log incoming requests
-const logStream = fs.createWriteStream(path.join(__dirname, 'access.log'), { flags: 'a' });
-app.use(morgan('combined', { stream: logStream }));
-
-// Custom middleware to check if hostname is accepted
-const checkAcceptedHostname = (req, res, next) => {
-  if (!acceptedHostnames.includes(req.hostname)) {
-    // Log the unauthorized hostname for debugging
-    console.log(`Hostname "${req.hostname}" is not allowed.`);
-    // Log the request details to the access.log file
-    logStream.write(`[${new Date().toISOString()}] Hostname "${req.hostname}" is not allowed.\n`);
-    return res.status(403).send('Forbidden');
-  }
-  next();
-};
-
-// Use the checkAcceptedHostname middleware for all routes
-app.use(checkAcceptedHostname);
+// ... (rest of the code remains the same)
 
 // Create the custom proxy
 const proxy = httpProxy.createProxyServer({});
@@ -52,7 +27,7 @@ const proxy = httpProxy.createProxyServer({});
 app.all('/*', async (req, res) => {
   const webapp = acceptedWebApps[req.headers.host];
   if (!webapp) return res.status(404).send('Not Found');
-  
+
   // Proxy the request to the backend server
   proxy.web(req, res, {
     target: webapp.backend,
@@ -73,38 +48,37 @@ const server = app.listen(PORT, () => {
   console.log(`Reverse proxy server is running on port ${PORT}`);
 });
 
-// Create a client socket to connect to the master socket node
+// Create a socket.io client to connect to the master socket node
 const masterNodeHost = 'localhost'; // Replace this with the hostname or IP of the master socket node
 const masterNodePort = 3000; // Replace this with the port number of the master socket node
 
-const client = net.createConnection(masterNodePort, masterNodeHost, () => {
+const masterNodeSocket = socketIOClient(`http://${masterNodeHost}:${masterNodePort}`); // Use socketIOClient here
+
+masterNodeSocket.on('connect', () => {
   console.log('Connected to master socket node.');
 
   // Optional: Do something upon successful connection to the master node if needed
+});
 
-  // Handle data received from the master socket node
-  client.on('data', (data) => {
-    // Parse the received data as JSON (assuming the server is sending JSON data)
-    const newAcceptedWebApps = JSON.parse(data);
-    console.log('Received updated accepted web applications:', newAcceptedWebApps);
+masterNodeSocket.on('data', (data) => {
+  // Parse the received data as JSON (assuming the server is sending JSON data)
+  const newAcceptedWebApps = JSON.parse(data);
+  console.log('Received updated accepted web applications:', newAcceptedWebApps);
 
-    // Update the accepted web applications list based on the received data
-    for (const app of newAcceptedWebApps) {
-      acceptedWebApps[app.domain] = { backend: app.backend };
-    }
+  // Update the accepted web applications list based on the received data
+  for (const app of newAcceptedWebApps) {
+    acceptedWebApps[app.domain] = { backend: app.backend };
+  }
+});
+
+masterNodeSocket.on('disconnect', () => {
+  console.log('Disconnected from master socket node.');
+  // Optionally, you may want to gracefully shutdown the proxy server when the master node disconnects
+  server.close(() => {
+    console.log('Proxy server shut down gracefully.');
   });
+});
 
-  // Handle the master node disconnection
-  client.on('end', () => {
-    console.log('Disconnected from master socket node.');
-    // Optionally, you may want to gracefully shutdown the proxy server when the master node disconnects
-    server.close(() => {
-      console.log('Proxy server shut down gracefully.');
-    });
-  });
-
-  // Handle errors
-  client.on('error', (err) => {
-    console.error('Socket error:', err.message);
-  });
+masterNodeSocket.on('error', (err) => {
+  console.error('Socket error:', err.message);
 });
