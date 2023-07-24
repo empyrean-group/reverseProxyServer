@@ -1,9 +1,6 @@
 const express = require('express');
-const morgan = require('morgan');
-const fs = require('fs');
-const path = require('path');
 const httpProxy = require('http-proxy');
-const socketIOClient = require('socket.io-client'); // Use the correct module
+const socketIOClient = require('socket.io-client');
 
 const app = express();
 const PORT = 8080;
@@ -18,14 +15,21 @@ const acceptedWebApps = {
   },
 };
 
-// ... (rest of the code remains the same)
+// Function to validate and sanitize the input
+const isValidDomain = (domain) => {
+  // Add more validation as per your requirements
+  return /^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(domain);
+};
 
 // Create the custom proxy
 const proxy = httpProxy.createProxyServer({});
 
 // Gateway route for all requests
 app.all('/*', async (req, res) => {
-  const webapp = acceptedWebApps[req.headers.host];
+  const host = req.headers.host;
+  if (!isValidDomain(host)) return res.status(400).send('Invalid Host'); // Validate the domain
+
+  const webapp = acceptedWebApps[host];
   if (!webapp) return res.status(404).send('Not Found');
 
   // Proxy the request to the backend server
@@ -52,22 +56,36 @@ const server = app.listen(PORT, () => {
 const masterNodeHost = 'localhost'; // Replace this with the hostname or IP of the master socket node
 const masterNodePort = 3000; // Replace this with the port number of the master socket node
 
-const masterNodeSocket = socketIOClient(`http://${masterNodeHost}:${masterNodePort}`); // Use socketIOClient here
+const masterNodeSocket = socketIOClient(`http://${masterNodeHost}:${masterNodePort}`);
 
 masterNodeSocket.on('connect', () => {
   console.log('Connected to master socket node.');
-
-  // Optional: Do something upon successful connection to the master node if needed
 });
 
 masterNodeSocket.on('data', (data) => {
-  // Parse the received data as JSON (assuming the server is sending JSON data)
-  const newAcceptedWebApps = JSON.parse(data);
-  console.log('Received updated accepted web applications:', newAcceptedWebApps);
+  try {
+    // Parse the received data as JSON (assuming the server is sending JSON data)
+    const newAcceptedWebApps = JSON.parse(data);
+    console.log('Received updated accepted web applications:', newAcceptedWebApps);
 
-  // Update the accepted web applications list based on the received data
-  for (const app of newAcceptedWebApps) {
-    acceptedWebApps[app.domain] = { backend: app.backend };
+    // Validate the received data format
+    if (!Array.isArray(newAcceptedWebApps)) {
+      throw new Error('Invalid data format received from master socket node. Expected an array.');
+    }
+
+    // Validate each object in the array
+    for (const app of newAcceptedWebApps) {
+      if (!app.domain || !isValidDomain(app.domain) || !app.backend) {
+        throw new Error('Invalid data format received from master socket node. Each object should have "domain" and "backend" properties.');
+      }
+    }
+
+    // Update the accepted web applications list based on the received data
+    for (const app of newAcceptedWebApps) {
+      acceptedWebApps[app.domain] = { backend: app.backend };
+    }
+  } catch (error) {
+    console.error('Error processing data from master socket node:', error.message);
   }
 });
 
