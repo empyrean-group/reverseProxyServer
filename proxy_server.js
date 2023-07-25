@@ -1,6 +1,8 @@
 const express = require('express');
 const httpProxy = require('http-proxy');
 const socketIOClient = require('socket.io-client');
+const morgan = require('morgan');
+const promBundle = require('express-prom-bundle'); // Import the prometheus middleware
 
 const app = express();
 const PORT = 8080;
@@ -8,11 +10,14 @@ const PORT = 8080;
 // Sample hashmap of accepted web applications with backend server information
 const acceptedWebApps = {
   "google.com": {
-    backend: "http://google.com" // Replace with the backend server's URL
+    backends: ["http://google.com"], // Replace with the backend server's URLs (an array for load balancing)
+    currentBackendIndex: 0, // Index to keep track of the last used backend server
   },
   "test.com": {
-    backend: "http://2.2.2.2" // Replace with the backend server's URL
+    backends: ["http://2.2.2.2"], // Replace with the backend server's URLs (an array for load balancing)
+    currentBackendIndex: 0, // Index to keep track of the last used backend server
   },
+  // Add other accepted web applications here
 };
 
 // Function to validate and sanitize the input
@@ -24,6 +29,38 @@ const isValidDomain = (domain) => {
 // Create the custom proxy
 const proxy = httpProxy.createProxyServer({});
 
+// Round-robin load balancing function
+const getNextBackend = (backends) => {
+  const nextBackendIndex = backends.currentBackendIndex + 1;
+  backends.currentBackendIndex = nextBackendIndex % backends.length;
+  return backends[nextBackendIndex];
+};
+
+// Custom format for morgan logging
+morgan.token('custom-remote-addr', (req) => {
+  return req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+});
+
+// Custom format for morgan logging
+morgan.token('custom-response-status', (req, res) => {
+  return res.statusCode;
+});
+
+// Setup morgan logging middleware
+app.use(morgan(':date[iso] :remote-addr ":method :url HTTP/:http-version" :status :res[content-length] - :response-time ms'));
+
+// Setup Prometheus middleware
+const metricsMiddleware = promBundle({
+  includeMethod: true,
+  includePath: true,
+  promClient: {
+    collectDefaultMetrics: {
+      timeout: 5000, // Interval to collect default metrics (e.g., CPU, memory, etc.)
+    },
+  },
+});
+app.use(metricsMiddleware);
+
 // Gateway route for all requests
 app.all('/*', async (req, res) => {
   const host = req.headers.host;
@@ -32,9 +69,11 @@ app.all('/*', async (req, res) => {
   const webapp = acceptedWebApps[host];
   if (!webapp) return res.status(404).send('Not Found');
 
+  const backend = getNextBackend(webapp.backends);
+
   // Proxy the request to the backend server
   proxy.web(req, res, {
-    target: webapp.backend,
+    target: backend,
     changeOrigin: true,
   });
 });
@@ -75,14 +114,14 @@ masterNodeSocket.on('data', (data) => {
 
     // Validate each object in the array
     for (const app of newAcceptedWebApps) {
-      if (!app.domain || !isValidDomain(app.domain) || !app.backend) {
-        throw new Error('Invalid data format received from master socket node. Each object should have "domain" and "backend" properties.');
+      if (!app.domain || !isValidDomain(app.domain) || !app.backends || !Array.isArray(app.backends)) {
+        throw new Error('Invalid data format received from master socket node. Each object should have "domain" and "backends" properties, where "backends" is an array of backend server URLs.');
       }
     }
 
     // Update the accepted web applications list based on the received data
     for (const app of newAcceptedWebApps) {
-      acceptedWebApps[app.domain] = { backend: app.backend };
+      acceptedWebApps[app.domain] = { backends: app.backends, currentBackendIndex: 0 };
     }
   } catch (error) {
     console.error('Error processing data from master socket node:', error.message);
