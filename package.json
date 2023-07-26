@@ -19,6 +19,7 @@
     "net": "^1.0.2",
     "path": "^0.12.7",
     "prom-client": "^14.2.0",
+    "redis": "^4.6.7",
     "socket.io": "^4.7.1",
     "socket.io-client": "^4.7.1"
   }

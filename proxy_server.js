@@ -2,10 +2,14 @@ const express = require('express');
 const httpProxy = require('http-proxy');
 const socketIOClient = require('socket.io-client');
 const morgan = require('morgan');
-const promBundle = require('express-prom-bundle'); // Import the prometheus middleware
+const promBundle = require('express-prom-bundle');
+const redis = require('redis');
 
 const app = express();
 const PORT = 8080;
+
+// Redis configuration
+const redisClient = redis.createClient();
 
 // Sample hashmap of accepted web applications with backend server information
 const acceptedWebApps = {
@@ -66,15 +70,58 @@ app.all('/*', async (req, res) => {
   const host = req.headers.host;
   if (!isValidDomain(host)) return res.status(400).send('Invalid Host'); // Validate the domain
 
-  const webapp = acceptedWebApps[host];
-  if (!webapp) return res.status(404).send('Not Found');
+  const remoteAddr = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+  const blockedKey = `blocked:${remoteAddr}`;
 
-  const backend = getNextBackend(webapp.backends);
+  // Check if the IP address is blocked
+  redisClient.exists(blockedKey, (err, reply) => {
+    if (err) {
+      console.error('Error checking if IP is blocked:', err.message);
+      return res.status(500).send('Internal Server Error');
+    }
 
-  // Proxy the request to the backend server
-  proxy.web(req, res, {
-    target: backend,
-    changeOrigin: true,
+    if (reply === 1) {
+      // IP address is blocked
+      return res.status(403).send('Access Denied - IP Blocked');
+    }
+
+    // Increment the connection count for the IP address
+    redisClient.incr(remoteAddr, (err, count) => {
+      if (err) {
+        console.error('Error incrementing connection count:', err.message);
+        return res.status(500).send('Internal Server Error');
+      }
+
+      // Set an expiration time of 1 second for the connection count
+      redisClient.expire(remoteAddr, 1, (err) => {
+        if (err) {
+          console.error('Error setting expiration time for connection count:', err.message);
+        }
+      });
+
+      // Check if the connection count exceeds the limit (100 connections per second)
+      if (count > 100) {
+        // Block the IP address for 5 minutes (300 seconds) in Redis using SETEX command
+        redisClient.setex(blockedKey, 300, 'blocked', (err) => {
+          if (err) {
+            console.error('Error blocking IP address:', err.message);
+          }
+        });
+
+        return res.status(403).send('Access Denied - IP Blocked');
+      }
+
+      const webapp = acceptedWebApps[host];
+      if (!webapp) return res.status(404).send('Not Found');
+
+      const backend = getNextBackend(webapp.backends);
+
+      // Proxy the request to the backend server
+      proxy.web(req, res, {
+        target: backend,
+        changeOrigin: true,
+      });
+    });
   });
 });
 
