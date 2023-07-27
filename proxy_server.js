@@ -65,63 +65,51 @@ const metricsMiddleware = promBundle({
 });
 app.use(metricsMiddleware);
 
-// Gateway route for all requests
-app.all('/*', async (req, res) => {
+// Middleware to store detailed request information in Redis
+app.use(async (req, res, next) => {
   const host = req.headers.host;
   if (!isValidDomain(host)) return res.status(400).send('Invalid Host'); // Validate the domain
 
   const remoteAddr = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
-  const blockedKey = `blocked:${remoteAddr}`;
+  const timestamp = new Date().toISOString();
+  const requestInfo = {
+    timestamp,
+    method: req.method,
+    url: req.url,
+    remoteAddr,
+    responseStatus: res.statusCode,
+  };
 
-  // Check if the IP address is blocked
-  redisClient.exists(blockedKey, (err, reply) => {
+  const requestsKey = `requests:${host}`;
+
+  // Use ltrim to ensure we keep only the latest 500 requests
+  redisClient.lpush(requestsKey, JSON.stringify(requestInfo), (err) => {
     if (err) {
-      console.error('Error checking if IP is blocked:', err.message);
-      return res.status(500).send('Internal Server Error');
+      console.error('Error storing request information in Redis:', err.message);
     }
-
-    if (reply === 1) {
-      // IP address is blocked
-      return res.status(403).send('Access Denied - IP Blocked');
-    }
-
-    // Increment the connection count for the IP address
-    redisClient.incr(remoteAddr, (err, count) => {
+    redisClient.ltrim(requestsKey, 0, 499, (err) => {
       if (err) {
-        console.error('Error incrementing connection count:', err.message);
-        return res.status(500).send('Internal Server Error');
+        console.error('Error trimming request list in Redis:', err.message);
       }
-
-      // Set an expiration time of 1 second for the connection count
-      redisClient.expire(remoteAddr, 1, (err) => {
-        if (err) {
-          console.error('Error setting expiration time for connection count:', err.message);
-        }
-      });
-
-      // Check if the connection count exceeds the limit (100 connections per second)
-      if (count > 100) {
-        // Block the IP address for 5 minutes (300 seconds) in Redis using SETEX command
-        redisClient.setex(blockedKey, 300, 'blocked', (err) => {
-          if (err) {
-            console.error('Error blocking IP address:', err.message);
-          }
-        });
-
-        return res.status(403).send('Access Denied - IP Blocked');
-      }
-
-      const webapp = acceptedWebApps[host];
-      if (!webapp) return res.status(404).send('Not Found');
-
-      const backend = getNextBackend(webapp.backends);
-
-      // Proxy the request to the backend server
-      proxy.web(req, res, {
-        target: backend,
-        changeOrigin: true,
-      });
     });
+  });
+
+  next();
+});
+
+// Gateway route for all requests
+app.all('/*', async (req, res) => {
+  const host = req.headers.host;
+
+  const webapp = acceptedWebApps[host];
+  if (!webapp) return res.status(404).send('Not Found');
+
+  const backend = getNextBackend(webapp.backends);
+
+  // Proxy the request to the backend server
+  proxy.web(req, res, {
+    target: backend,
+    changeOrigin: true,
   });
 });
 
