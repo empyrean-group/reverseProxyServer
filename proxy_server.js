@@ -65,34 +65,21 @@ const metricsMiddleware = promBundle({
 });
 app.use(metricsMiddleware);
 
-// Middleware to store detailed request information in Redis
+// Middleware for connection tracking using Redis
 app.use(async (req, res, next) => {
-  const host = req.headers.host;
-  if (!isValidDomain(host)) return res.status(400).send('Invalid Host'); // Validate the domain
-
   const remoteAddr = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
-  const timestamp = new Date().toISOString();
-  const requestInfo = {
-    timestamp,
-    method: req.method,
-    url: req.url,
-    remoteAddr,
-    responseStatus: res.statusCode,
-  };
+  const currentTimestamp = Math.floor(Date.now() / 1000); // Get current timestamp in seconds
+  const connectionKey = `connections:${remoteAddr}`;
 
-  const requestsKey = `requests:${host}`;
-
-  // Use ltrim to ensure we keep only the latest 500 requests
-  redisClient.lpush(requestsKey, JSON.stringify(requestInfo), (err) => {
-    if (err) {
-      console.error('Error storing request information in Redis:', err.message);
-    }
-    redisClient.ltrim(requestsKey, 0, 499, (err) => {
+  // Increment connection count for the IP address and set an expiration of 1 second
+  redisClient.multi()
+    .hincrby(connectionKey, currentTimestamp, 1)
+    .expire(connectionKey, 1)
+    .exec((err, replies) => {
       if (err) {
-        console.error('Error trimming request list in Redis:', err.message);
+        console.error('Error tracking connection in Redis:', err.message);
       }
     });
-  });
 
   next();
 });
@@ -147,30 +134,39 @@ masterNodeSocket.on('data', (data) => {
       throw new Error('Invalid data format received from master socket node. Expected an array.');
     }
 
-    // Validate each object in the array
-    for (const app of newAcceptedWebApps) {
-      if (!app.domain || !isValidDomain(app.domain) || !app.backends || !Array.isArray(app.backends)) {
-        throw new Error('Invalid data format received from master socket node. Each object should have "domain" and "backends" properties, where "backends" is an array of backend server URLs.');
-      }
-    }
-
-    // Update the accepted web applications list based on the received data
-    for (const app of newAcceptedWebApps) {
-      acceptedWebApps[app.domain] = { backends: app.backends, currentBackendIndex: 0 };
-    }
-  } catch (error) {
-    console.error('Error processing data from master socket node:', error.message);
+    // Validate each
+// object in the array
+for (const app of newAcceptedWebApps) {
+  if (!app.domain || !isValidDomain(app.domain) || !app.backends || !Array.isArray(app.backends)) {
+    throw new Error('Invalid data format received from master socket node. Each object should have "domain" and "backends" properties, where "backends" is an array of backend server URLs.');
   }
+}
+
+// Update the accepted web applications list based on the received data
+for (const app of newAcceptedWebApps) {
+  acceptedWebApps[app.domain] = { backends: app.backends, currentBackendIndex: 0 };
+}
+} catch (error) {
+console.error('Error processing data from master socket node:', error.message);
+}
 });
 
 masterNodeSocket.on('disconnect', () => {
-  console.log('Disconnected from master socket node.');
-  // Optionally, you may want to gracefully shutdown the proxy server when the master node disconnects
-  server.close(() => {
-    console.log('Proxy server shut down gracefully.');
-  });
+console.log('Disconnected from master socket node.');
+// Optionally, you may want to gracefully shutdown the proxy server when the master node disconnects
+server.close(() => {
+console.log('Proxy server shut down gracefully.');
+});
 });
 
 masterNodeSocket.on('error', (err) => {
-  console.error('Socket error:', err.message);
+console.error('Socket error:', err.message);
+});
+
+// Clean up the Redis connection when the server is stopped
+process.on('SIGINT', () => {
+redisClient.quit(() => {
+console.log('Redis connection closed.');
+process.exit(0);
+});
 });
