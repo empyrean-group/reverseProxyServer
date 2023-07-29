@@ -8,36 +8,19 @@ const redis = require('redis');
 const app = express();
 const PORT = 8080;
 
-// Redis configuration
-const redisClient = redis.createClient();
-
-// Sample hashmap of accepted web applications with backend server information
-const acceptedWebApps = {
-  "google.com": {
-    backends: ["http://google.com"], // Replace with the backend server's URLs (an array for load balancing)
-    currentBackendIndex: 0, // Index to keep track of the last used backend server
-  },
-  "test.com": {
-    backends: ["http://2.2.2.2"], // Replace with the backend server's URLs (an array for load balancing)
-    currentBackendIndex: 0, // Index to keep track of the last used backend server
-  },
+const acceptedWebApps = [
+  { domain: "google.com", backends: ["http://google.com"] },
+  { domain: "test.com", backends: ["http://2.2.2.2"] },
   // Add other accepted web applications here
-};
+];
+
+// Create the custom proxy
+const proxy = httpProxy.createProxyServer({});
 
 // Function to validate and sanitize the input
 const isValidDomain = (domain) => {
   // Add more validation as per your requirements
   return /^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(domain);
-};
-
-// Create the custom proxy
-const proxy = httpProxy.createProxyServer({});
-
-// Round-robin load balancing function
-const getNextBackend = (backends) => {
-  const nextBackendIndex = backends.currentBackendIndex + 1;
-  backends.currentBackendIndex = nextBackendIndex % backends.length;
-  return backends[nextBackendIndex];
 };
 
 // Custom format for morgan logging
@@ -66,6 +49,8 @@ const metricsMiddleware = promBundle({
 app.use(metricsMiddleware);
 
 // Middleware for connection tracking using Redis
+const redisClient = redis.createClient();
+
 app.use(async (req, res, next) => {
   const remoteAddr = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
   const currentTimestamp = Math.floor(Date.now() / 1000); // Get current timestamp in seconds
@@ -88,10 +73,10 @@ app.use(async (req, res, next) => {
 app.all('/*', async (req, res) => {
   const host = req.headers.host;
 
-  const webapp = acceptedWebApps[host];
+  const webapp = acceptedWebApps.find((app) => app.domain === host);
   if (!webapp) return res.status(404).send('Not Found');
 
-  const backend = getNextBackend(webapp.backends);
+  const backend = webapp.backends[0]; // Using the first backend for simplicity, you can implement load balancing here.
 
   // Proxy the request to the backend server
   proxy.web(req, res, {
@@ -103,8 +88,6 @@ app.all('/*', async (req, res) => {
 // Error handling middleware for other unhandled errors
 app.use((err, req, res, next) => {
   console.error(`Unhandled Error: ${err.message}`);
-  // Log the error to the access.log file
-  logStream.write(`[${new Date().toISOString()}] Unhandled Error: ${err.message}\n`);
   res.status(500).send('Internal Server Error');
 });
 
@@ -121,52 +104,27 @@ const masterNodeSocket = socketIOClient(`http://${masterNodeHost}:${masterNodePo
 
 masterNodeSocket.on('connect', () => {
   console.log('Connected to master socket node.');
-});
 
-masterNodeSocket.on('data', (data) => {
-  try {
-    // Parse the received data as JSON (assuming the server is sending JSON data)
-    const newAcceptedWebApps = JSON.parse(data);
-    console.log('Received updated accepted web applications:', newAcceptedWebApps);
-
-    // Validate the received data format
-    if (!Array.isArray(newAcceptedWebApps)) {
-      throw new Error('Invalid data format received from master socket node. Expected an array.');
-    }
-
-    // Validate each
-// object in the array
-for (const app of newAcceptedWebApps) {
-  if (!app.domain || !isValidDomain(app.domain) || !app.backends || !Array.isArray(app.backends)) {
-    throw new Error('Invalid data format received from master socket node. Each object should have "domain" and "backends" properties, where "backends" is an array of backend server URLs.');
-  }
-}
-
-// Update the accepted web applications list based on the received data
-for (const app of newAcceptedWebApps) {
-  acceptedWebApps[app.domain] = { backends: app.backends, currentBackendIndex: 0 };
-}
-} catch (error) {
-console.error('Error processing data from master socket node:', error.message);
-}
+  // Send only the accepted web applications array to the master node
+  masterNodeSocket.emit('data', acceptedWebApps);
 });
 
 masterNodeSocket.on('disconnect', () => {
-console.log('Disconnected from master socket node.');
-// Optionally, you may want to gracefully shutdown the proxy server when the master node disconnects
-server.close(() => {
-console.log('Proxy server shut down gracefully.');
-});
+  console.log('Disconnected from master socket node.');
+  // Optionally, you may want to gracefully shutdown the proxy server when the master node disconnects
+  server.close(() => {
+    console.log('Proxy server shut down gracefully.');
+  });
 });
 
 masterNodeSocket.on('error', (err) => {
-console.error('Socket error:', err.message);
+  console.error('Socket error:', err.message);
 });
 
-// Clean up the Redis connection when the server is stopped
+// Clean up the Redis connection when the server is stopped   
 process.on('SIGINT', () => {
-redisClient.quit(() => {
-console.log('Redis connection closed.');
-process.exit(0);
-});
+  redisClient.quit(() => {
+    console.log('Redis connection closed.');
+    process.exit(0);
+  });
 });
