@@ -1,80 +1,47 @@
-const socketIO = require('socket.io-client');
-const os = require('os');
+const socketIOClient = require('socket.io-client');
+const morgan = require('morgan');
+const express = require('express');
+const app = express();
+const PORT = 8081; // Change this to your desired port number
 
 const masterNodeHost = 'localhost'; // Replace this with the hostname or IP of the master socket node
 const masterNodePort = 3000; // Replace this with the port number of the master socket node
 
-const socket = socketIO(`http://${masterNodeHost}:${masterNodePort}`);
+const blockedIPs = new Set();
 
-socket.on('connect', () => {
-  console.log('Child socket node connected to master node.');
+// Middleware for checking blocked IPs and refusing requests
+app.use((req, res, next) => {
+  const remoteAddr = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+  if (blockedIPs.has(remoteAddr)) {
+    console.log(`Refused request from blocked IP: ${remoteAddr}`);
+    return res.status(403).send('Forbidden');
+  }
+  next();
 });
 
-// Function to get the current timestamp in milliseconds
-const getCurrentTimestamp = () => new Date().getTime();
-
-// Variables to track connection count per IP and the last connection timestamp
-const connectionsPerIP = {};
-const lastConnectionTimestamp = {};
-
-// Function to calculate connections per second
-const calculateConnectionsPerSecond = () => {
-  const currentTimestamp = getCurrentTimestamp();
-  for (const ip in connectionsPerIP) {
-    const count = connectionsPerIP[ip].filter((timestamp) => currentTimestamp - timestamp < 1000).length;
-    delete connectionsPerIP[ip];
-    if (count > 0) {
-      console.log(`Connections per second for IP ${ip}: ${count}`);
-      socket.emit('data', { ip, connectionsPerSecond: count });
-    }
-  }
-};
-
-// Function to handle a new connection
-const handleNewConnection = (ip) => {
-  if (!connectionsPerIP[ip]) {
-    connectionsPerIP[ip] = [];
-  }
-  connectionsPerIP[ip].push(getCurrentTimestamp());
-};
-
-// Function to handle disconnection
-const handleDisconnection = (ip) => {
-  if (connectionsPerIP[ip]) {
-    calculateConnectionsPerSecond();
-  }
-};
-
-// Socket events
-socket.on('connect', () => {
-  console.log('Child socket node connected to master node.');
-
-  // Broadcast the system information to the master node on connection
-  const systemInfo = {
-    hostname: os.hostname(),
-    totalMemory: os.totalmem(),
-    freeMemory: os.freemem(),
-    loadAverage: os.loadavg(),
-  };
-  socket.emit('data', { systemInfo });
+const server = app.listen(PORT, () => {
+  console.log(`Child socket node is running on port ${PORT}`);
 });
 
-socket.on('disconnect', () => {
-  console.log('Child socket node disconnected from master node.');
+// Create a socket.io client to connect to the master socket node
+const masterNodeSocket = socketIOClient(`http://${masterNodeHost}:${masterNodePort}`);
+
+masterNodeSocket.on('connect', () => {
+  console.log('Connected to master socket node.');
+
+  // Send a message to the master node that the child node is ready to receive blocked IP information
+  masterNodeSocket.emit('childReady');
 });
 
-socket.on('error', (err) => {
+masterNodeSocket.on('blockedIP', (ip) => {
+  console.log(`Received blocked IP information: ${ip}`);
+  blockedIPs.add(ip);
+});
+
+masterNodeSocket.on('disconnect', () => {
+  console.log('Disconnected from master socket node.');
+});
+
+masterNodeSocket.on('error', (err) => {
   console.error('Socket error:', err.message);
-});
-
-// Add an event listener for a new connection
-socket.on('newConnection', (data) => {
-  const { ip } = data;
-  handleNewConnection(ip);
-});
-
-// Add an event listener for a disconnection
-socket.on('disconnection', (data) => {
-  const { ip } = data;
-  handleDisconnection(ip);
 });
