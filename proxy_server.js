@@ -12,17 +12,11 @@ const PORT = 8080;
 const redisClient = redis.createClient();
 
 // Sample hashmap of accepted web applications with backend server information
-const acceptedWebApps = {
-  "google.com": {
-    backends: ["http://google.com"], // Replace with the backend server's URLs (an array for load balancing)
-    currentBackendIndex: 0, // Index to keep track of the last used backend server
-  },
-  "test.com": {
-    backends: ["http://2.2.2.2"], // Replace with the backend server's URLs (an array for load balancing)
-    currentBackendIndex: 0, // Index to keep track of the last used backend server
-  },
+const acceptedWebApps = [
+  { domain: "google.com", backends: ["http://google.com"], loadBalancing: "round-robin" },
+  { domain: "test.com", backends: ["http://2.2.2.2"], loadBalancing: "least-connections" },
   // Add other accepted web applications here
-};
+];
 
 // Function to validate and sanitize the input
 const isValidDomain = (domain) => {
@@ -34,10 +28,40 @@ const isValidDomain = (domain) => {
 const proxy = httpProxy.createProxyServer({});
 
 // Round-robin load balancing function
-const getNextBackend = (backends) => {
+const getNextBackendRoundRobin = (backends) => {
   const nextBackendIndex = backends.currentBackendIndex + 1;
   backends.currentBackendIndex = nextBackendIndex % backends.length;
   return backends[nextBackendIndex];
+};
+
+// Least connections load balancing function
+const getNextBackendLeastConnections = async (backends) => {
+  let minConnections = Number.MAX_VALUE;
+  let selectedBackend;
+
+  for (const backend of backends) {
+    const connectionCount = await getCurrentConnectionCount(backend);
+    if (connectionCount < minConnections) {
+      minConnections = connectionCount;
+      selectedBackend = backend;
+    }
+  }
+
+  return selectedBackend;
+};
+
+// Function to get the current connection count for a backend from Redis
+const getCurrentConnectionCount = (backend) => {
+  return new Promise((resolve, reject) => {
+    const key = `connections:${backend}`;
+    redisClient.hlen(key, (err, count) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(count);
+      }
+    });
+  });
 };
 
 // Custom format for morgan logging
@@ -88,12 +112,19 @@ app.use(async (req, res, next) => {
 app.all('/*', async (req, res) => {
   const host = req.headers.host;
 
-  const webapp = acceptedWebApps[host];
+  const webapp = acceptedWebApps.find((app) => app.domain === host);
   if (!webapp) return res.status(404).send('Not Found');
 
-  const backend = getNextBackend(webapp.backends);
+  let backend;
+  if (webapp.loadBalancing === 'round-robin') {
+    backend = getNextBackendRoundRobin(webapp.backends);
+  } else if (webapp.loadBalancing === 'least-connections') {
+    backend = await getNextBackendLeastConnections(webapp.backends);
+  } else {
+    return res.status(500).send('Invalid load balancing strategy');
+  }
 
-  // Proxy the request to the backend server
+  // Proxy the request to the selected backend server
   proxy.web(req, res, {
     target: backend,
     changeOrigin: true,
@@ -191,3 +222,4 @@ process.on('SIGINT', () => {
     process.exit(0);
   });
 });
+
