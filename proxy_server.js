@@ -8,6 +8,19 @@ const redis = require('redis');
 const app = express();
 const PORT = 8080;
 
+const MongoClient = require('mongodb').MongoClient;
+
+// MongoDB connection URL
+const mongoUrl = 'mongodb://localhost:27017';
+const dbName = 'connection_tracking_db'; // Change this to your desired database name
+
+MongoClient.connect(mongoUrl, { useNewUrlParser: true, useUnifiedTopology: true }, (err, client) => {
+  if (err) {
+    console.error('Error connecting to MongoDB:', err.message);
+    return;
+  }
+  const db = client.db(dbName);
+
 // Redis configuration
 const redisClient = redis.createClient();
 
@@ -89,24 +102,29 @@ const metricsMiddleware = promBundle({
 });
 app.use(metricsMiddleware);
 
-// Middleware for connection tracking using Redis
-app.use(async (req, res, next) => {
-  const remoteAddr = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
-  const currentTimestamp = Math.floor(Date.now() / 1000); // Get current timestamp in seconds
-  const connectionKey = `connections:${remoteAddr}`;
+ // Middleware for connection tracking using Redis
+ app.use(async (req, res, next) => {
+    const remoteAddr = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+    const currentTimestamp = Math.floor(Date.now() / 1000); // Get current timestamp in seconds
+    const connectionKey = `connections:${remoteAddr}`;
 
-  // Increment connection count for the IP address and set an expiration of 1 second
-  redisClient.multi()
-    .hincrby(connectionKey, currentTimestamp, 1)
-    .expire(connectionKey, 1)
-    .exec((err, replies) => {
-      if (err) {
-        console.error('Error tracking connection in Redis:', err.message);
-      }
-    });
+    // Increment connection count for the IP address and set an expiration of 1 second
+    redisClient.multi()
+      .hincrby(connectionKey, currentTimestamp, 1)
+      .expire(connectionKey, 1)
+      .exec(async (err, replies) => {
+        if (err) {
+          console.error('Error tracking connection in Redis:', err.message);
+        } else {
+          // Update MongoDB with the connection data
+          const collection = db.collection('connection_data');
+          const timestamp = new Date(currentTimestamp * 1000); // Convert to milliseconds
+          await collection.insertOne({ ip: remoteAddr, timestamp, count: 1 });
+        }
+      });
 
-  next();
-});
+    next();
+  });
 
 // Gateway route for all requests
 app.all('/*', async (req, res) => {
@@ -222,4 +240,4 @@ process.on('SIGINT', () => {
     process.exit(0);
   });
 });
-
+});

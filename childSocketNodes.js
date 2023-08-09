@@ -38,6 +38,16 @@ masterNodeSocket.on('blockedIP', (ip) => {
   blockedIPs.add(ip);
 });
 
+masterNodeSocket.on('connectionData', (data) => {
+  try {
+    const connectionData = JSON.parse(data);
+    console.log('Received connection data:', connectionData);
+    // Process connection data as needed
+  } catch (error) {
+    console.error('Error processing connection data:', error.message);
+  }
+});
+
 masterNodeSocket.on('disconnect', () => {
   console.log('Disconnected from master socket node.');
 });
